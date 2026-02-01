@@ -6,10 +6,26 @@ CAPTCHA solving, and account pool management.
 
 Components:
 - proxy: ProxyManager with rotation, health tracking, and multi-provider failover
-- captcha: CAPTCHA solving with multi-provider chain (2Captcha, Anti-Captcha, CapSolver)
+- captcha: CAPTCHA solving with multi-provider chain (CapSolver, 2Captcha, Anti-Captcha)
 - account: Bot account pool management with usage limits and cooldown handling
 """
 
+from src.bot.services.captcha import (
+    CaptchaSolver,
+    CaptchaType,
+    ProviderStatus,
+    CaptchaChallenge,
+    SolveResult,
+    ProviderStats,
+    CapSolverProvider,
+    TwoCaptchaProvider,
+    AntiCaptchaProvider,
+    CaptchaSolverChain,
+    CaptchaDetector,
+    CaptchaTokenInjector,
+    CaptchaCostTracker,
+    VFSCaptchaHandler,
+)
 from src.bot.services.proxy import (
     ProxyManager,
     ProxyPoolManager,
@@ -30,27 +46,49 @@ from src.bot.services.proxy import (
 )
 
 __all__ = [
-    # Main manager
+    # Proxy - Main manager
     "ProxyManager",
     "ProxyPoolManager",
-    # Data classes
+    # Proxy - Data classes
     "ProxyHealth",
-    # Enums
+    # Proxy - Enums
     "ProxyStatus",
     "ProxyType",
-    # Provider configs
+    # Proxy - Provider configs
     "BrightDataConfig",
     "OxylabsConfig",
     "SmartproxyConfig",
-    # Site config
+    # Proxy - Site config
     "SiteProxyConfig",
-    # Rotation strategies
+    # Proxy - Rotation strategies
     "RotatingProxyStrategy",
     "StickySessionStrategy",
     "GeoRotationStrategy",
     "ASNDiversityStrategy",
-    # Failover and optimization
+    # Proxy - Failover and optimization
     "ProxyFailoverChain",
     "ProxyCostOptimizer",
     "ProxyHealthMonitor",
+    # CAPTCHA - Main interface
+    "CaptchaSolver",
+    # CAPTCHA - Enums
+    "CaptchaType",
+    "ProviderStatus",
+    # CAPTCHA - Data classes
+    "CaptchaChallenge",
+    "SolveResult",
+    "ProviderStats",
+    # CAPTCHA - Providers
+    "CapSolverProvider",
+    "TwoCaptchaProvider",
+    "AntiCaptchaProvider",
+    # CAPTCHA - Solver chain
+    "CaptchaSolverChain",
+    # CAPTCHA - Detection and injection
+    "CaptchaDetector",
+    "CaptchaTokenInjector",
+    # CAPTCHA - Cost tracking
+    "CaptchaCostTracker",
+    # CAPTCHA - Site handlers
+    "VFSCaptchaHandler",
 ]
