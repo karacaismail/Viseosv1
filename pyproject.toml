@@ -1,0 +1,156 @@
+[project]
+name = "vise-os"
+version = "0.1.0"
+description = "B2B2C automation platform for Turkish visa agencies to automate appointment booking processes"
+readme = "README.md"
+license = { text = "Proprietary" }
+requires-python = ">=3.12"
+authors = [
+    { name = "VISE OS Team" }
+]
+keywords = ["visa", "automation", "booking", "fastapi", "celery"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+]
+
+dependencies = [
+    # Web Framework
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.1.0",
+
+    # Task Queue
+    "celery[redis]>=5.3.0",
+    "redis>=5.0.0",
+
+    # HTTP Client
+    "httpx>=0.26.0",
+
+    # Database / Directus
+    "asyncpg>=0.29.0",
+
+    # Browser Automation
+    "playwright>=1.41.0",
+    "camoufox>=0.4.0",
+
+    # AI Providers
+    "anthropic>=0.18.0",
+    "openai>=1.12.0",
+
+    # Security / Encryption
+    "cryptography>=42.0.0",
+    "python-jose[cryptography]>=3.3.0",
+
+    # Google Sheets Integration
+    "gspread>=6.0.0",
+    "google-auth>=2.27.0",
+
+    # Email / SMS
+    "aiosmtplib>=3.0.0",
+    "aioimaplib>=1.0.0",
+
+    # Telegram Notifications
+    "python-telegram-bot>=21.0",
+
+    # Payment Processing
+    "stripe>=8.0.0",
+
+    # Monitoring & Logging
+    "structlog>=24.1.0",
+    "prometheus-client>=0.19.0",
+    "sentry-sdk[fastapi]>=1.40.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.2.0",
+    "orjson>=3.9.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "httpx>=0.26.0",
+    "mypy>=1.8.0",
+    "ruff>=0.2.0",
+    "pre-commit>=3.6.0",
+    "faker>=22.0.0",
+]
+
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "faker>=22.0.0",
+    "respx>=0.20.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+strict = false
+plugins = ["pydantic.mypy"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
