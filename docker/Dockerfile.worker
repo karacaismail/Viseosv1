@@ -1,0 +1,132 @@
+# =============================================================================
+# VISE OS Celery Worker Dockerfile
+# Background task processing with browser automation support
+# Supports: VFS Global, iDATA, BLS Spain, KKOSMOS adapters
+# =============================================================================
+
+# Build stage for dependencies
+FROM python:3.12-slim as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /build
+
+# Copy dependency files
+COPY pyproject.toml ./
+
+# Install pip and build tools
+RUN pip install --no-cache-dir --upgrade pip hatchling
+
+# Create wheel from pyproject.toml
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels .
+
+# Install all dependencies to a clean location
+RUN pip install --no-cache-dir --target=/build/deps .
+
+# =============================================================================
+# Production stage
+# =============================================================================
+FROM python:3.12-slim as production
+
+# Labels
+LABEL maintainer="VISE OS Team"
+LABEL description="VISE OS Celery Worker - Background task processing for visa automation"
+LABEL version="0.1.0"
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    # Playwright configuration
+    PLAYWRIGHT_BROWSERS_PATH=/app/.playwright \
+    # Celery configuration
+    C_FORCE_ROOT=false \
+    CELERY_WORKER_HIJACK_ROOT_LOGGER=false \
+    # Application settings
+    APP_HOME=/app \
+    APP_USER=vise
+
+# Create non-root user for security
+RUN groupadd --gid 1000 ${APP_USER} \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash ${APP_USER}
+
+# Install runtime dependencies for browser automation
+# These are required for Playwright/Camoufox to work properly
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # System utilities
+    curl \
+    wget \
+    ca-certificates \
+    procps \
+    # Browser dependencies (Chromium/Firefox)
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatspi2.0-0 \
+    libgtk-3-0 \
+    # Font support for proper text rendering
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    fonts-dejavu-core \
+    # X11 virtual framebuffer for headless browser
+    xvfb \
+    # Additional libraries for stability
+    libx11-xcb1 \
+    libxcb-dri3-0 \
+    libxss1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set working directory
+WORKDIR ${APP_HOME}
+
+# Copy installed dependencies from builder
+COPY --from=builder /build/deps /usr/local/lib/python3.12/site-packages/
+
+# Copy application source code
+COPY --chown=${APP_USER}:${APP_USER} src/ ${APP_HOME}/src/
+COPY --chown=${APP_USER}:${APP_USER} pyproject.toml ${APP_HOME}/
+
+# Create necessary directories
+RUN mkdir -p ${APP_HOME}/logs \
+    ${APP_HOME}/.playwright \
+    ${APP_HOME}/celerybeat-schedule \
+    ${APP_HOME}/browser-profiles \
+    && chown -R ${APP_USER}:${APP_USER} ${APP_HOME}
+
+# Switch to non-root user
+USER ${APP_USER}
+
+# Install Playwright browsers (chromium and firefox for stealth operations)
+RUN python -m playwright install chromium firefox \
+    && python -m playwright install-deps chromium firefox 2>/dev/null || true
+
+# Fetch Camoufox browser for anti-detection
+RUN python -c "import camoufox; camoufox.fetch()" 2>/dev/null || echo "Camoufox fetch skipped - will run on first use"
+
+# Health check for Celery worker
+# Uses celery inspect to verify worker is responding
+HEALTHCHECK --interval=60s --timeout=30s --start-period=60s --retries=3 \
+    CMD celery -A src.queue.celery_app inspect ping -d celery@$HOSTNAME || exit 1
+
+# Default command - run Celery worker
+# Can be overridden in docker-compose for different worker types (VFS, iDATA, BLS, etc.)
+CMD ["celery", "-A", "src.queue.celery_app", "worker", "--loglevel=info", "--concurrency=5"]

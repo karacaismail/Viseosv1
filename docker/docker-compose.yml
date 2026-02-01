@@ -1,0 +1,495 @@
+# VISE OS Docker Compose Configuration
+# Enterprise-grade visa appointment booking automation platform
+# Supports 200 parallel sessions, 1000 daily appointments
+
+services:
+  # =============================================================================
+  # DATA LAYER
+  # =============================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: vise-os-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vise_os}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vise_os_password}
+      POSTGRES_DB: ${POSTGRES_DB:-vise_os}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vise_os} -d ${POSTGRES_DB:-vise_os}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - vise-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vise-os-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vise-network
+
+  # =============================================================================
+  # CMS & ADMIN LAYER
+  # =============================================================================
+
+  directus:
+    image: directus/directus:10.10
+    container_name: vise-os-directus
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      KEY: ${DIRECTUS_KEY:-your-random-secret-key-min-32-chars}
+      SECRET: ${DIRECTUS_SECRET:-your-random-secret-min-32-chars}
+
+      # Database Connection
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-vise_os}
+      DB_USER: ${POSTGRES_USER:-vise_os}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-vise_os_password}
+
+      # Redis Cache
+      CACHE_ENABLED: "true"
+      CACHE_STORE: redis
+      CACHE_REDIS: redis://redis:6379/3
+
+      # Admin User
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL:-admin@vise-os.com}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD:-admin_password}
+
+      # Performance
+      RATE_LIMITER_ENABLED: "false"
+      RATE_LIMITER_STORE: redis
+      RATE_LIMITER_REDIS: redis://redis:6379/4
+
+      # Extensions
+      EXTENSIONS_PATH: /directus/extensions
+      EXTENSIONS_AUTO_RELOAD: "true"
+
+      # Logging
+      LOG_LEVEL: ${DIRECTUS_LOG_LEVEL:-info}
+
+      # Security
+      CORS_ENABLED: "true"
+      CORS_ORIGIN: "true"
+
+      # Telemetry
+      TELEMETRY: "false"
+    volumes:
+      - directus_uploads:/directus/uploads
+      - directus_extensions:/directus/extensions
+    ports:
+      - "${DIRECTUS_PORT:-8055}:8055"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8055/server/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - vise-network
+
+  # =============================================================================
+  # APPLICATION LAYER
+  # =============================================================================
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: vise-os-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      directus:
+        condition: service_healthy
+    environment:
+      # Application
+      APP_NAME: VISE OS
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+
+      # Database (via Directus)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vise_os}:${POSTGRES_PASSWORD:-vise_os_password}@postgres:5432/${POSTGRES_DB:-vise_os}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN}
+
+      # Redis (separate DBs for different purposes)
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+      # AI Providers
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      # Proxy Services
+      BRIGHTDATA_USERNAME: ${BRIGHTDATA_USERNAME}
+      BRIGHTDATA_PASSWORD: ${BRIGHTDATA_PASSWORD}
+      OXYLABS_USERNAME: ${OXYLABS_USERNAME}
+      OXYLABS_PASSWORD: ${OXYLABS_PASSWORD}
+
+      # CAPTCHA Services
+      TWOCAPTCHA_API_KEY: ${TWOCAPTCHA_API_KEY}
+      CAPSOLVER_API_KEY: ${CAPSOLVER_API_KEY}
+
+      # SMS/Phone Services
+      FIVESIM_API_KEY: ${FIVESIM_API_KEY}
+
+      # Payment
+      IYZICO_API_KEY: ${IYZICO_API_KEY}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY}
+      STRIPE_API_KEY: ${STRIPE_API_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+
+      # Email
+      RESEND_API_KEY: ${RESEND_API_KEY}
+
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
+      # Monitoring
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID}
+      SENTRY_DSN: ${SENTRY_DSN}
+
+      # Prometheus (required for multi-worker deployments)
+      prometheus_multiproc_dir: /tmp/prometheus_multiproc
+    volumes:
+      - api_logs:/app/logs
+      - prometheus_multiproc:/tmp/prometheus_multiproc
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - vise-network
+
+  # =============================================================================
+  # WORKER LAYER - Celery Workers
+  # =============================================================================
+
+  # Generic worker for overflow and non-site-specific tasks
+  worker-generic:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: vise-os-worker-generic
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A src.queue.celery_app worker --loglevel=info --queues=default,maintenance,sync --concurrency=5 --hostname=worker-generic@%h
+    environment:
+      # Copy same environment as api
+      APP_NAME: VISE OS
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vise_os}:${POSTGRES_PASSWORD:-vise_os_password}@postgres:5432/${POSTGRES_DB:-vise_os}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BRIGHTDATA_USERNAME: ${BRIGHTDATA_USERNAME}
+      BRIGHTDATA_PASSWORD: ${BRIGHTDATA_PASSWORD}
+      TWOCAPTCHA_API_KEY: ${TWOCAPTCHA_API_KEY}
+      CAPSOLVER_API_KEY: ${CAPSOLVER_API_KEY}
+      FIVESIM_API_KEY: ${FIVESIM_API_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID}
+      SENTRY_DSN: ${SENTRY_DSN}
+    volumes:
+      - worker_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A src.queue.celery_app inspect ping -d celery@worker-generic@$HOSTNAME || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    networks:
+      - vise-network
+
+  # VFS Global dedicated worker (highest volume)
+  worker-vfs:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: vise-os-worker-vfs
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A src.queue.celery_app worker --loglevel=info --queues=vfs,high_priority --concurrency=10 --hostname=worker-vfs@%h
+    environment:
+      APP_NAME: VISE OS
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vise_os}:${POSTGRES_PASSWORD:-vise_os_password}@postgres:5432/${POSTGRES_DB:-vise_os}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BRIGHTDATA_USERNAME: ${BRIGHTDATA_USERNAME}
+      BRIGHTDATA_PASSWORD: ${BRIGHTDATA_PASSWORD}
+      TWOCAPTCHA_API_KEY: ${TWOCAPTCHA_API_KEY}
+      CAPSOLVER_API_KEY: ${CAPSOLVER_API_KEY}
+      FIVESIM_API_KEY: ${FIVESIM_API_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID}
+      SENTRY_DSN: ${SENTRY_DSN}
+    volumes:
+      - worker_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    networks:
+      - vise-network
+
+  # iDATA dedicated worker
+  worker-idata:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: vise-os-worker-idata
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A src.queue.celery_app worker --loglevel=info --queues=idata --concurrency=5 --hostname=worker-idata@%h
+    environment:
+      APP_NAME: VISE OS
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vise_os}:${POSTGRES_PASSWORD:-vise_os_password}@postgres:5432/${POSTGRES_DB:-vise_os}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BRIGHTDATA_USERNAME: ${BRIGHTDATA_USERNAME}
+      BRIGHTDATA_PASSWORD: ${BRIGHTDATA_PASSWORD}
+      TWOCAPTCHA_API_KEY: ${TWOCAPTCHA_API_KEY}
+      CAPSOLVER_API_KEY: ${CAPSOLVER_API_KEY}
+      FIVESIM_API_KEY: ${FIVESIM_API_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID}
+      SENTRY_DSN: ${SENTRY_DSN}
+    volumes:
+      - worker_logs:/app/logs
+    networks:
+      - vise-network
+
+  # BLS Spain dedicated worker
+  worker-bls:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: vise-os-worker-bls
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A src.queue.celery_app worker --loglevel=info --queues=bls --concurrency=3 --hostname=worker-bls@%h
+    environment:
+      APP_NAME: VISE OS
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vise_os}:${POSTGRES_PASSWORD:-vise_os_password}@postgres:5432/${POSTGRES_DB:-vise_os}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BRIGHTDATA_USERNAME: ${BRIGHTDATA_USERNAME}
+      BRIGHTDATA_PASSWORD: ${BRIGHTDATA_PASSWORD}
+      TWOCAPTCHA_API_KEY: ${TWOCAPTCHA_API_KEY}
+      CAPSOLVER_API_KEY: ${CAPSOLVER_API_KEY}
+      FIVESIM_API_KEY: ${FIVESIM_API_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID}
+      SENTRY_DSN: ${SENTRY_DSN}
+    volumes:
+      - worker_logs:/app/logs
+    networks:
+      - vise-network
+
+  # =============================================================================
+  # SCHEDULER LAYER - Celery Beat
+  # =============================================================================
+
+  beat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: vise-os-beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A src.queue.celery_app beat --loglevel=info
+    environment:
+      APP_NAME: VISE OS
+      DEBUG: ${DEBUG:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vise_os}:${POSTGRES_PASSWORD:-vise_os_password}@postgres:5432/${POSTGRES_DB:-vise_os}
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID}
+      SENTRY_DSN: ${SENTRY_DSN}
+    volumes:
+      - beat_schedule:/app/celerybeat-schedule
+    networks:
+      - vise-network
+
+  # =============================================================================
+  # MONITORING LAYER
+  # =============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: vise-os-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ../config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - vise-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: vise-os-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - vise-network
+    profiles:
+      - monitoring
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+
+networks:
+  vise-network:
+    driver: bridge
+    name: vise-os-network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+
+volumes:
+  postgres_data:
+    name: vise-os-postgres-data
+  redis_data:
+    name: vise-os-redis-data
+  directus_uploads:
+    name: vise-os-directus-uploads
+  directus_extensions:
+    name: vise-os-directus-extensions
+  api_logs:
+    name: vise-os-api-logs
+  worker_logs:
+    name: vise-os-worker-logs
+  beat_schedule:
+    name: vise-os-beat-schedule
+  prometheus_multiproc:
+    name: vise-os-prometheus-multiproc
+  prometheus_data:
+    name: vise-os-prometheus-data
+  grafana_data:
+    name: vise-os-grafana-data
