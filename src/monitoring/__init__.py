@@ -9,3 +9,33 @@ Components:
 - alerts: Alert system with escalation
 - analytics: Reporting and analytics service
 """
+
+from src.monitoring.metrics import (
+    REGISTRY,
+    AccountMetrics,
+    APIMetrics,
+    BookingMetrics,
+    BrowserMetrics,
+    CaptchaMetrics,
+    CreditMetrics,
+    DirectusMetrics,
+    PaymentMetrics,
+    ProxyMetrics,
+    QueueMetrics,
+    metrics,
+)
+
+__all__ = [
+    "REGISTRY",
+    "metrics",
+    "BookingMetrics",
+    "QueueMetrics",
+    "BrowserMetrics",
+    "ProxyMetrics",
+    "CaptchaMetrics",
+    "AccountMetrics",
+    "PaymentMetrics",
+    "APIMetrics",
+    "DirectusMetrics",
+    "CreditMetrics",
+]
