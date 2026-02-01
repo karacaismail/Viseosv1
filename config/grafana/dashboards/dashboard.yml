@@ -1,0 +1,17 @@
+# Grafana Dashboard Provisioning Configuration
+# Auto-loads VISE OS dashboards on startup
+
+apiVersion: 1
+
+providers:
+  - name: 'VISE OS Dashboards'
+    orgId: 1
+    folder: 'VISE OS'
+    folderUid: 'vise-os'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
