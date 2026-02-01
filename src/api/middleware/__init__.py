@@ -6,6 +6,8 @@ This module provides HTTP middleware for:
 - CORS handling
 - Request timing and metrics
 - Error handling
+- Authentication (JWT and API key)
+- Rate limiting
 
 Usage:
     from fastapi import FastAPI
@@ -18,16 +20,41 @@ Usage:
     app.add_middleware(LoggingMiddleware)
 """
 
+from src.api.middleware.auth import (
+    AuthMiddleware,
+    create_access_token,
+    decode_token,
+    get_current_agency,
+    get_current_user,
+    require_role,
+)
 from src.api.middleware.logging import (
     LoggingMiddleware,
     RequestContextMiddleware,
     TimingMiddleware,
 )
+from src.api.middleware.rate_limit import (
+    RateLimitMiddleware,
+    get_rate_limit_store,
+    rate_limit,
+)
 
 __all__ = [
+    # Logging
     "LoggingMiddleware",
     "RequestContextMiddleware",
     "TimingMiddleware",
+    # Auth
+    "AuthMiddleware",
+    "get_current_user",
+    "get_current_agency",
+    "require_role",
+    "create_access_token",
+    "decode_token",
+    # Rate Limiting
+    "RateLimitMiddleware",
+    "get_rate_limit_store",
+    "rate_limit",
 ]
 
 
@@ -38,6 +65,15 @@ def setup_middleware(app):
     This function sets up middleware in the correct order.
     Middleware is executed in reverse order of addition,
     so the last added middleware runs first.
+
+    Middleware order (execution order, first to last):
+    1. LoggingMiddleware - Logs all requests
+    2. RequestContextMiddleware - Adds request ID
+    3. TimingMiddleware - Measures request duration
+    4. RateLimitMiddleware - Enforces rate limits
+    5. AuthMiddleware - Validates authentication
+    6. CORSMiddleware - Handles CORS
+    7. GZipMiddleware - Compresses responses
 
     Args:
         app: The FastAPI application instance.
@@ -73,8 +109,21 @@ def setup_middleware(app):
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID", "X-Response-Time"],
+        expose_headers=[
+            "X-Request-ID",
+            "X-Response-Time",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+        ],
     )
+
+    # Add authentication middleware
+    # Note: Auth runs after rate limiting to prevent auth overhead on rate-limited requests
+    app.add_middleware(AuthMiddleware)
+
+    # Add rate limiting middleware
+    app.add_middleware(RateLimitMiddleware)
 
     # Add timing middleware (measures request duration)
     app.add_middleware(TimingMiddleware)
