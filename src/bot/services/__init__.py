@@ -10,6 +10,18 @@ Components:
 - account: Bot account pool management with usage limits and cooldown handling
 """
 
+from src.bot.services.account import (
+    AccountPoolManager,
+    AccountPoolMonitor,
+    AccountProxyPairing,
+    AccountStatus,
+    BanRecoveryScheduler,
+    BotAccount,
+    AccountPoolStats,
+    AccountHealthCalculator,
+    SiteAccountConfig,
+    TargetSystem,
+)
 from src.bot.services.captcha import (
     CaptchaSolver,
     CaptchaType,
@@ -46,6 +58,24 @@ from src.bot.services.proxy import (
 )
 
 __all__ = [
+    # Account - Main manager
+    "AccountPoolManager",
+    # Account - Data classes
+    "BotAccount",
+    "AccountPoolStats",
+    # Account - Enums
+    "AccountStatus",
+    "TargetSystem",
+    # Account - Site config
+    "SiteAccountConfig",
+    # Account - Health calculation
+    "AccountHealthCalculator",
+    # Account - Pairing
+    "AccountProxyPairing",
+    # Account - Recovery
+    "BanRecoveryScheduler",
+    # Account - Monitoring
+    "AccountPoolMonitor",
     # Proxy - Main manager
     "ProxyManager",
     "ProxyPoolManager",
