@@ -9,7 +9,7 @@ Available Adapters:
 - VFSAdapter: VFS Global implementation
 - IDataAdapter: iDATA implementation (Germany/Italy Schengen)
 - BLSAdapter: BLS Spain implementation (keyboard-only input)
-- KKOSMOSAdapter: KKOSMOS implementation (TODO)
+- KKOSMOSAdapter: KKOSMOS implementation (SMS/Voice verification)
 
 Usage:
     from src.bot.adapters import (
@@ -100,6 +100,23 @@ from src.bot.adapters.bls import (
     BLSErrorClassification,
 )
 
+from src.bot.adapters.kkosmos import (
+    KKOSMOSAdapter,
+    KKOSMOSFlowState,
+    KKOSMOSURLBuilder,
+    KKOSMOSSelectors,
+    KKOSMOSVerificationHandler,
+    KKOSMOSErrorPatterns,
+    KKOSMOSErrorClassifier,
+    KKOSMOSErrorClassification,
+    PhonePoolManager,
+    PhoneNumber,
+    PhoneStatus,
+    FiveSimClient,
+    SMSHubClient,
+    SMSActivateClient,
+)
+
 __all__ = [
     # Main adapter class
     "BaseSiteAdapter",
@@ -132,6 +149,21 @@ __all__ = [
     "BLSErrorPatterns",
     "BLSErrorClassifier",
     "BLSErrorClassification",
+    # KKOSMOS-specific exports
+    "KKOSMOSAdapter",
+    "KKOSMOSFlowState",
+    "KKOSMOSURLBuilder",
+    "KKOSMOSSelectors",
+    "KKOSMOSVerificationHandler",
+    "KKOSMOSErrorPatterns",
+    "KKOSMOSErrorClassifier",
+    "KKOSMOSErrorClassification",
+    "PhonePoolManager",
+    "PhoneNumber",
+    "PhoneStatus",
+    "FiveSimClient",
+    "SMSHubClient",
+    "SMSActivateClient",
     # Data classes
     "AdapterConfig",
     "BookingResult",
