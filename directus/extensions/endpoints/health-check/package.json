@@ -1,0 +1,25 @@
+{
+  "name": "directus-extension-health-check",
+  "version": "1.0.0",
+  "description": "VISE OS health-check endpoint for Directus",
+  "type": "module",
+  "directus:extension": {
+    "type": "endpoint",
+    "path": "index.js",
+    "source": "index.js",
+    "host": "^10.0.0"
+  },
+  "keywords": [
+    "directus",
+    "directus-extension",
+    "directus-extension-endpoint",
+    "vise-os",
+    "health-check",
+    "monitoring"
+  ],
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "devDependencies": {
+    "@directus/extensions-sdk": "^10.3.0"
+  }
+}
