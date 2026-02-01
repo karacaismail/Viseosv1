@@ -61,6 +61,15 @@ from src.ai.decision_engine import (
     ErrorRecoveryEngine,
     AIDecisionEngine,
 )
+from src.ai.selector_healer import (
+    SelectorType,
+    HealingStrategy,
+    SelectorHealingResult,
+    SelectorHistoryEntry,
+    SelectorContext,
+    SelectorAnalyzer,
+    SelectorHealer,
+)
 
 
 __all__ = [
@@ -88,4 +97,15 @@ __all__ = [
     "AnomalyDetectionEngine",
     "ErrorRecoveryEngine",
     "AIDecisionEngine",
+    # Selector Healer enums
+    "SelectorType",
+    "HealingStrategy",
+    # Selector Healer data classes
+    "SelectorHealingResult",
+    "SelectorHistoryEntry",
+    "SelectorContext",
+    # Selector Healer utilities
+    "SelectorAnalyzer",
+    # Selector Healer main class
+    "SelectorHealer",
 ]
