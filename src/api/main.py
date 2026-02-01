@@ -386,7 +386,7 @@ def register_routers(app: FastAPI) -> None:
         app: The FastAPI application instance.
     """
     # Import routers
-    from src.api.routers import health
+    from src.api.routers import bookings, health
 
     # Root endpoint
     @app.get(
@@ -405,9 +405,11 @@ def register_routers(app: FastAPI) -> None:
     # Register health router
     app.include_router(health.router, prefix="/api", tags=["health"])
 
+    # Register bookings router
+    app.include_router(bookings.router, prefix="/api/bookings", tags=["bookings"])
+
     # TODO: Register additional routers as they are implemented
-    # from src.api.routers import bookings, agencies, applicants, webhooks
-    # app.include_router(bookings.router, prefix="/api/bookings", tags=["bookings"])
+    # from src.api.routers import agencies, applicants, webhooks
     # app.include_router(agencies.router, prefix="/api/agencies", tags=["agencies"])
     # app.include_router(applicants.router, prefix="/api/applicants", tags=["applicants"])
     # app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
