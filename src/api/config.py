@@ -207,6 +207,12 @@ class Settings(BaseSettings):
     BROWSER_TIMEOUT: int = 30000
     BROWSER_SCREENSHOT_ON_ERROR: bool = True
 
+    # -------------------------------------------------------------------------
+    # Google Sheets Integration
+    # -------------------------------------------------------------------------
+    GOOGLE_SERVICE_ACCOUNT_PATH: str = ""
+    GOOGLE_SHEETS_SYNC_INTERVAL_MINUTES: int = 5
+
     # Pydantic V2 configuration - NOT class Config (V1 pattern)
     model_config = SettingsConfigDict(
         env_file=".env",
