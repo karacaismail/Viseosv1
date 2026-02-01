@@ -7,13 +7,14 @@ visa appointment booking systems (VFS Global, iDATA, BLS Spain, KKOSMOS).
 Available Adapters:
 - BaseSiteAdapter: Abstract base class for all site adapters
 - VFSAdapter: VFS Global implementation
-- IDataAdapter: iDATA implementation (TODO)
+- IDataAdapter: iDATA implementation (Germany/Italy Schengen)
 - BLSAdapter: BLS Spain implementation (TODO)
 - KKOSMOSAdapter: KKOSMOS implementation (TODO)
 
 Usage:
     from src.bot.adapters import (
         VFSAdapter,
+        IDataAdapter,
         Slot,
         SlotSearchCriteria,
         BookingResult,
@@ -23,6 +24,13 @@ Usage:
 
     # Create VFS adapter
     adapter = VFSAdapter(
+        stealth_engine=stealth_engine,
+        proxy_manager=proxy_manager,
+        captcha_solver=captcha_solver,
+    )
+
+    # Create iDATA adapter
+    idata_adapter = IDataAdapter(
         stealth_engine=stealth_engine,
         proxy_manager=proxy_manager,
         captcha_solver=captcha_solver,
@@ -69,11 +77,24 @@ from src.bot.adapters.vfs import (
     HumanBehaviorSimulator,
 )
 
+from src.bot.adapters.idata import (
+    IDataAdapter,
+    IDataFlowState,
+    IDataEndpoints,
+    IDataSelectors,
+    IDataErrorClassifier,
+    IDataErrorClassification,
+    IDataErrorPatterns,
+    IDataAPIClient,
+    IDataSlotMonitor,
+)
+
 __all__ = [
     # Main adapter class
     "BaseSiteAdapter",
     # Concrete adapters
     "VFSAdapter",
+    "IDataAdapter",
     # VFS-specific exports
     "VFSFlowState",
     "VFSURLBuilder",
@@ -82,6 +103,15 @@ __all__ = [
     "VFSErrorClassification",
     "VFSErrorPatterns",
     "HumanBehaviorSimulator",
+    # iDATA-specific exports
+    "IDataFlowState",
+    "IDataEndpoints",
+    "IDataSelectors",
+    "IDataErrorClassifier",
+    "IDataErrorClassification",
+    "IDataErrorPatterns",
+    "IDataAPIClient",
+    "IDataSlotMonitor",
     # Data classes
     "AdapterConfig",
     "BookingResult",
