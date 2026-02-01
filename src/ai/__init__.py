@@ -6,30 +6,39 @@ CSS selector healing, and anomaly detection.
 
 Components:
 - providers: Anthropic (Claude), OpenAI (GPT-4) integrations
-- decision_engine: AI decision making service (future)
-- selector_healer: Automatic CSS selector recovery (future)
-- anomaly_detector: Bot detection evasion (future)
+- decision_engine: AI decision making service with strategy selection
+- selector_healer: Automatic CSS selector recovery
+- anomaly_detector: Bot detection evasion
 
 Usage:
     from src.ai import (
         LLMProvider,
         LLMConfig,
         LLMClientFactory,
-        AnthropicProvider,
-        OpenAIProvider,
+        AIDecisionEngine,
+        DecisionType,
+        StrategyType,
+        BrowserContext,
+        FlowContext,
     )
 
-    # Create a Claude client
+    # Create an AI Decision Engine
     config = LLMConfig(
         provider=LLMProvider.CLAUDE,
         api_key="sk-ant-...",
         model="claude-3-5-sonnet-20241022",
     )
-    client = LLMClientFactory.create(config)
+    engine = AIDecisionEngine(config)
 
-    # Use the client
-    response = await client.complete("Analyze this error...")
-    await client.close()
+    # Make decisions
+    decision = await engine.make_decision(
+        decision_request="evaluate strategy",
+        flow_context=flow_ctx,
+        browser_context=browser_ctx,
+        additional_data={"errors": ["timeout"]},
+    )
+
+    await engine.close()
 """
 
 from src.ai.providers import (
@@ -39,6 +48,18 @@ from src.ai.providers import (
     LLMClientFactory,
     AnthropicProvider,
     OpenAIProvider,
+)
+from src.ai.decision_engine import (
+    DecisionType,
+    StrategyType,
+    AIDecision,
+    BrowserContext,
+    FlowContext,
+    SelectorHealingEngine,
+    StrategySwitchingEngine,
+    AnomalyDetectionEngine,
+    ErrorRecoveryEngine,
+    AIDecisionEngine,
 )
 
 
@@ -54,4 +75,17 @@ __all__ = [
     # Provider implementations
     "AnthropicProvider",
     "OpenAIProvider",
+    # Decision Engine enums
+    "DecisionType",
+    "StrategyType",
+    # Decision Engine data classes
+    "AIDecision",
+    "BrowserContext",
+    "FlowContext",
+    # Decision Engine components
+    "SelectorHealingEngine",
+    "StrategySwitchingEngine",
+    "AnomalyDetectionEngine",
+    "ErrorRecoveryEngine",
+    "AIDecisionEngine",
 ]
