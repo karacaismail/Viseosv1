@@ -385,26 +385,8 @@ def register_routers(app: FastAPI) -> None:
     Args:
         app: The FastAPI application instance.
     """
-    # Health check endpoint (inline for now, will be moved to health router)
-    @app.get(
-        "/api/health",
-        tags=["health"],
-        summary="Health check",
-        response_model=dict[str, Any],
-    )
-    async def health_check() -> dict[str, Any]:
-        """
-        Check if the API is healthy and running.
-
-        Returns basic health status. For detailed health checks
-        including dependencies, use /api/health/ready.
-        """
-        settings = get_settings()
-        return {
-            "status": "healthy",
-            "app_name": settings.APP_NAME,
-            "environment": settings.ENVIRONMENT,
-        }
+    # Import routers
+    from src.api.routers import health
 
     # Root endpoint
     @app.get(
@@ -420,9 +402,11 @@ def register_routers(app: FastAPI) -> None:
             "docs": "/docs" if settings.DEBUG else None,
         }
 
-    # TODO: Register routers as they are implemented
-    # from src.api.routers import bookings, agencies, applicants, webhooks, health
-    # app.include_router(health.router, prefix="/api", tags=["health"])
+    # Register health router
+    app.include_router(health.router, prefix="/api", tags=["health"])
+
+    # TODO: Register additional routers as they are implemented
+    # from src.api.routers import bookings, agencies, applicants, webhooks
     # app.include_router(bookings.router, prefix="/api/bookings", tags=["bookings"])
     # app.include_router(agencies.router, prefix="/api/agencies", tags=["agencies"])
     # app.include_router(applicants.router, prefix="/api/applicants", tags=["applicants"])
