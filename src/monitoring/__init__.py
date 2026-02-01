@@ -10,6 +10,29 @@ Components:
 - analytics: Reporting and analytics service
 """
 
+from src.monitoring.alerts import (
+    ALERT_CONFIGS,
+    ESCALATION_TIMEOUTS,
+    Alert,
+    AlertCategory,
+    AlertConfig,
+    AlertError,
+    AlertManager,
+    AlertSeverity,
+    AlertStatus,
+    AutoRemediationEngine,
+    EscalationError,
+    OnCallPerson,
+    OnCallRouter,
+    OnCallSchedule,
+    OnCallTier,
+    RemediationAction,
+    RemediationError,
+    RemediationResult,
+    alert_manager,
+    clear_alert_manager_cache,
+    get_alert_manager,
+)
 from src.monitoring.metrics import (
     REGISTRY,
     AccountMetrics,
@@ -26,6 +49,7 @@ from src.monitoring.metrics import (
 )
 
 __all__ = [
+    # Metrics
     "REGISTRY",
     "metrics",
     "BookingMetrics",
@@ -38,4 +62,26 @@ __all__ = [
     "APIMetrics",
     "DirectusMetrics",
     "CreditMetrics",
+    # Alerts
+    "AlertManager",
+    "get_alert_manager",
+    "clear_alert_manager_cache",
+    "alert_manager",
+    "AutoRemediationEngine",
+    "OnCallRouter",
+    "Alert",
+    "AlertConfig",
+    "OnCallPerson",
+    "OnCallSchedule",
+    "RemediationAction",
+    "RemediationResult",
+    "AlertSeverity",
+    "AlertCategory",
+    "AlertStatus",
+    "OnCallTier",
+    "ALERT_CONFIGS",
+    "ESCALATION_TIMEOUTS",
+    "AlertError",
+    "EscalationError",
+    "RemediationError",
 ]
