@@ -70,6 +70,18 @@ from src.ai.selector_healer import (
     SelectorAnalyzer,
     SelectorHealer,
 )
+from src.ai.anomaly_detector import (
+    DetectionType,
+    RiskLevel,
+    EvasionStrategy,
+    BehaviorCategory,
+    AnomalyResult,
+    BehavioralData,
+    AnomalyHistoryEntry,
+    DetectionPatterns,
+    BehavioralAnalyzer,
+    AnomalyDetector,
+)
 
 
 __all__ = [
@@ -108,4 +120,18 @@ __all__ = [
     "SelectorAnalyzer",
     # Selector Healer main class
     "SelectorHealer",
+    # Anomaly Detector enums
+    "DetectionType",
+    "RiskLevel",
+    "EvasionStrategy",
+    "BehaviorCategory",
+    # Anomaly Detector data classes
+    "AnomalyResult",
+    "BehavioralData",
+    "AnomalyHistoryEntry",
+    # Anomaly Detector utilities
+    "DetectionPatterns",
+    "BehavioralAnalyzer",
+    # Anomaly Detector main class
+    "AnomalyDetector",
 ]
