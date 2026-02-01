@@ -8,7 +8,7 @@ Available Adapters:
 - BaseSiteAdapter: Abstract base class for all site adapters
 - VFSAdapter: VFS Global implementation
 - IDataAdapter: iDATA implementation (Germany/Italy Schengen)
-- BLSAdapter: BLS Spain implementation (TODO)
+- BLSAdapter: BLS Spain implementation (keyboard-only input)
 - KKOSMOSAdapter: KKOSMOS implementation (TODO)
 
 Usage:
@@ -89,6 +89,17 @@ from src.bot.adapters.idata import (
     IDataSlotMonitor,
 )
 
+from src.bot.adapters.bls import (
+    BLSAdapter,
+    BLSFlowState,
+    BLSURLBuilder,
+    BLSSelectors,
+    BLSKeyboardTyper,
+    BLSErrorPatterns,
+    BLSErrorClassifier,
+    BLSErrorClassification,
+)
+
 __all__ = [
     # Main adapter class
     "BaseSiteAdapter",
@@ -112,6 +123,15 @@ __all__ = [
     "IDataErrorPatterns",
     "IDataAPIClient",
     "IDataSlotMonitor",
+    # BLS-specific exports
+    "BLSAdapter",
+    "BLSFlowState",
+    "BLSURLBuilder",
+    "BLSSelectors",
+    "BLSKeyboardTyper",
+    "BLSErrorPatterns",
+    "BLSErrorClassifier",
+    "BLSErrorClassification",
     # Data classes
     "AdapterConfig",
     "BookingResult",
