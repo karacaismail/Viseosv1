@@ -6,15 +6,24 @@ Provides booking management functionality including:
 - Booking context and state transitions
 - Retry policies and compensation transactions
 - Repository for data access
+- Full-flow booking service with orchestration
 
 Components:
 - state_machine: BookingStateMachine, BookingState, BookingContext
 - FailureReason, StateTransition for tracking
 - RetryManager, RetryPolicy for retry handling
 - repository: BookingRepository for data access
+- service: BookingService for full flow integration
 """
 
 from src.core.booking.repository import BookingRepository
+from src.core.booking.service import (
+    BookingEvent,
+    BookingEventType,
+    BookingPriority,
+    BookingService,
+    PriorityFactors,
+)
 from src.core.booking.state_machine import (
     BookingContext,
     BookingState,
@@ -32,6 +41,12 @@ __all__ = [
     "BookingStateMachine",
     "BookingState",
     "BookingContext",
+    # Service
+    "BookingService",
+    "BookingEvent",
+    "BookingEventType",
+    "BookingPriority",
+    "PriorityFactors",
     # Repository
     "BookingRepository",
     # Supporting classes
