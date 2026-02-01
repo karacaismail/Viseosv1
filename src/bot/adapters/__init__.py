@@ -6,14 +6,14 @@ visa appointment booking systems (VFS Global, iDATA, BLS Spain, KKOSMOS).
 
 Available Adapters:
 - BaseSiteAdapter: Abstract base class for all site adapters
-- VFSAdapter: VFS Global implementation (TODO)
+- VFSAdapter: VFS Global implementation
 - IDataAdapter: iDATA implementation (TODO)
 - BLSAdapter: BLS Spain implementation (TODO)
 - KKOSMOSAdapter: KKOSMOS implementation (TODO)
 
 Usage:
-    from src.bot.adapters.base import BaseSiteAdapter
     from src.bot.adapters import (
+        VFSAdapter,
         Slot,
         SlotSearchCriteria,
         BookingResult,
@@ -21,7 +21,7 @@ Usage:
         AdapterConfig,
     )
 
-    # Create a concrete adapter
+    # Create VFS adapter
     adapter = VFSAdapter(
         stealth_engine=stealth_engine,
         proxy_manager=proxy_manager,
@@ -30,6 +30,7 @@ Usage:
 
     # Use the adapter
     async with adapter.create_session(account) as session:
+        await adapter.login(session, account)
         slots = await adapter.search_slots(session, criteria)
         result = await adapter.book_slot(session, slots[0], applicant)
 """
@@ -56,9 +57,31 @@ from src.bot.adapters.base import (
     AdapterMetrics,
 )
 
+# Concrete adapter implementations
+from src.bot.adapters.vfs import (
+    VFSAdapter,
+    VFSFlowState,
+    VFSURLBuilder,
+    VFSSelectors,
+    VFSErrorClassifier,
+    VFSErrorClassification,
+    VFSErrorPatterns,
+    HumanBehaviorSimulator,
+)
+
 __all__ = [
     # Main adapter class
     "BaseSiteAdapter",
+    # Concrete adapters
+    "VFSAdapter",
+    # VFS-specific exports
+    "VFSFlowState",
+    "VFSURLBuilder",
+    "VFSSelectors",
+    "VFSErrorClassifier",
+    "VFSErrorClassification",
+    "VFSErrorPatterns",
+    "HumanBehaviorSimulator",
     # Data classes
     "AdapterConfig",
     "BookingResult",
