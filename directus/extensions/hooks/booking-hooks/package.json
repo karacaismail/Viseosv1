@@ -1,0 +1,26 @@
+{
+  "name": "directus-extension-booking-hooks",
+  "version": "1.0.0",
+  "description": "VISE OS booking lifecycle hooks for Directus",
+  "type": "module",
+  "directus:extension": {
+    "type": "hook",
+    "path": "index.js",
+    "host": "^10.0.0"
+  },
+  "keywords": [
+    "directus",
+    "directus-extension",
+    "directus-extension-hook",
+    "vise-os",
+    "booking"
+  ],
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "dependencies": {
+    "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "@directus/extensions-sdk": "^10.3.0"
+  }
+}
