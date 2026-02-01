@@ -164,6 +164,10 @@ class Settings(BaseSettings):
         default=SecretStr(""),
         description="Fernet key for PII field-level encryption",
     )
+    WEBHOOK_SECRET: str = Field(
+        default="",
+        description="Secret for webhook signature verification (Directus, Sheets)",
+    )
     JWT_SECRET_KEY: SecretStr = Field(
         default=SecretStr(""),
         description="JWT signing secret key (min 32 chars)",
@@ -251,6 +255,40 @@ class Settings(BaseSettings):
     def redis_result_url(self) -> str:
         """Get Redis URL for Celery results (DB 2)."""
         return self.CELERY_RESULT_BACKEND
+
+    @property
+    def has_anthropic(self) -> bool:
+        """Check if Anthropic API key is configured."""
+        return bool(self.ANTHROPIC_API_KEY.get_secret_value())
+
+    @property
+    def has_openai(self) -> bool:
+        """Check if OpenAI API key is configured."""
+        return bool(self.OPENAI_API_KEY.get_secret_value())
+
+    @property
+    def has_proxy(self) -> bool:
+        """Check if any proxy service is configured."""
+        return bool(self.BRIGHTDATA_USERNAME) or bool(self.OXYLABS_USERNAME)
+
+    @property
+    def has_captcha(self) -> bool:
+        """Check if any CAPTCHA solver is configured."""
+        return bool(self.TWOCAPTCHA_API_KEY.get_secret_value()) or bool(
+            self.CAPSOLVER_API_KEY.get_secret_value()
+        )
+
+    @property
+    def has_telegram(self) -> bool:
+        """Check if Telegram bot is configured for alerts."""
+        return bool(self.TELEGRAM_BOT_TOKEN.get_secret_value()) and bool(
+            self.TELEGRAM_ALERT_CHAT_ID
+        )
+
+    @property
+    def RATE_LIMIT_PER_MINUTE(self) -> int:
+        """Alias for RATE_LIMIT_REQUESTS_PER_MINUTE for compatibility."""
+        return self.RATE_LIMIT_REQUESTS_PER_MINUTE
 
 
 @lru_cache
