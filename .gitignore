@@ -1,0 +1,197 @@
+# ==========================================
+# VISE OS - Git Ignore Configuration
+# ==========================================
+
+# ==========================================
+# SENSITIVE FILES (NEVER COMMIT)
+# ==========================================
+.env
+.env.local
+.env.production
+.env.*.local
+secrets.yaml
+secrets.enc.yaml
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Auto Claude sensitive files
+.auto-claude/
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
+.worktrees/
+.security-key
+logs/security/
+
+# ==========================================
+# DEPENDENCIES
+# ==========================================
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# Node.js (for Directus extensions)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ==========================================
+# DATABASE
+# ==========================================
+*.db
+*.sqlite
+*.sqlite3
+*.sql.backup
+dump.sql
+*.dump
+
+# PostgreSQL
+*.dump
+*.backup
+
+# ==========================================
+# LOGS
+# ==========================================
+logs/
+*.log
+log/
+*.log.*
+
+# ==========================================
+# OS & IDE
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.code-workspace
+
+# ==========================================
+# TESTING & COVERAGE
+# ==========================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ==========================================
+# BUILD & PACKAGE
+# ==========================================
+*.tar.gz
+*.zip
+*.rar
+dist/
+build/
+
+# ==========================================
+# RUNTIME DATA
+# ==========================================
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# ==========================================
+# BROWSER AUTOMATION
+# ==========================================
+# Playwright
+.playwright/
+playwright/.cache/
+
+# Screenshots & recordings (keep examples)
+screenshots/*.png
+recordings/*.webm
+!screenshots/example.png
+!recordings/example.webm
+
+# Browser profiles (keep templates)
+browser-profiles/*
+!browser-profiles/template/
+
+# ==========================================
+# TEMP FILES
+# ==========================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.cache
+
+# ==========================================
+# DOCKER (keep configs, ignore runtime)
+# ==========================================
+docker-compose.override.yml
+.docker/
+
+# ==========================================
+# KEEP THESE (EXPLICIT WHITELIST)
+# ==========================================
+!.env.example
+!.gitignore
+!.gitattributes
+!README.md
+!LICENSE
