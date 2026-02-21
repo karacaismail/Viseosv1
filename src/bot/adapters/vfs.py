@@ -112,6 +112,7 @@ class VFSFlowState(Enum):
     CONFIRMING = "confirming"
     PAYMENT_PAGE = "payment_page"
     PROCESSING_PAYMENT = "processing_payment"
+    PAYMENT_3DS = "payment_3ds"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -501,6 +502,11 @@ class VFSAdapter(BaseSiteAdapter):
         self.flow_state = VFSFlowState.INITIAL
         self.selectors = VFSSelectors
         self.url_builder = VFSURLBuilder
+        self.source_country = (
+            config.custom_settings.get("source_country", "tr")
+            if config.custom_settings
+            else "tr"
+        )
 
         logger.info(
             "vfs_adapter_initialized",
@@ -547,7 +553,7 @@ class VFSAdapter(BaseSiteAdapter):
         try:
             # Build login URL
             login_url = self.url_builder.login_url(
-                source_country="tr",
+                source_country=self.source_country,
                 target_country=getattr(account, "country", "de"),
             )
 
@@ -705,7 +711,7 @@ class VFSAdapter(BaseSiteAdapter):
             # Navigate to appointment page
             self.flow_state = VFSFlowState.SELECTING_CATEGORY
             appointment_url = self.url_builder.appointment_url(
-                source_country="tr",
+                source_country=self.source_country,
                 target_country=criteria.country,
             )
 
@@ -1284,7 +1290,11 @@ class VFSAdapter(BaseSiteAdapter):
 
         try:
             # Find all available date cells
-            selector = f"{self.selectors.DATE_CELL}{self.selectors.AVAILABLE_DATE}"
+            # Build compound selectors: each DATE_CELL part combined with each AVAILABLE_DATE part
+            date_parts = [s.strip() for s in self.selectors.DATE_CELL.split(",")]
+            avail_parts = [s.strip() for s in self.selectors.AVAILABLE_DATE.split(",")]
+            compound = [f"{dp}{ap}" for dp in date_parts for ap in avail_parts]
+            selector = ", ".join(compound)
             cells = await page.query_selector_all(selector)
 
             for cell in cells:
@@ -1542,18 +1552,43 @@ class VFSAdapter(BaseSiteAdapter):
         """
         Navigate datepicker to select date.
 
+        Iterates month navigation until the target month is visible,
+        then clicks the target day cell.
+
         Args:
             page: Playwright page instance.
             target_date: Date to select.
         """
-        day_selector = (
-            f'[data-date="{target_date.strftime("%Y-%m-%d")}"], '
-            f'.day:has-text("{target_date.day}")'
-        )
+        max_navigation_attempts = 24  # Up to 2 years of months
 
-        day_cell = await page.query_selector(day_selector)
-        if day_cell:
-            await day_cell.click()
+        for _ in range(max_navigation_attempts):
+            day_selector = (
+                f'[data-date="{target_date.strftime("%Y-%m-%d")}"], '
+                f'.day:has-text("{target_date.day}")'
+            )
+
+            day_cell = await page.query_selector(day_selector)
+            if day_cell:
+                await day_cell.click()
+                return
+
+            # Target day not visible — navigate to next month
+            next_btn = await page.query_selector(self.selectors.NEXT_MONTH_BTN)
+            if next_btn:
+                await next_btn.click()
+                await asyncio.sleep(0.5)
+            else:
+                logger.warning(
+                    "vfs_datepicker_no_next_button",
+                    target_date=target_date.strftime("%Y-%m-%d"),
+                )
+                break
+
+        logger.warning(
+            "vfs_datepicker_date_not_found",
+            target_date=target_date.strftime("%Y-%m-%d"),
+            attempts=max_navigation_attempts,
+        )
 
     async def _confirm_booking(self, page: Page) -> None:
         """
@@ -1683,52 +1718,52 @@ class VFSAdapter(BaseSiteAdapter):
 
     async def _handle_3ds(self, page: Page, timeout: int = 120) -> None:
         """
-        Handle 3D Secure authentication.
+        Handle 3D Secure authentication using ThreeDSHandler.
+
+        Detects 3DS challenges (iframe or redirect) and handles
+        the full authentication flow including OTP entry.
 
         Args:
             page: Playwright page instance.
             timeout: Maximum wait time in seconds.
         """
-        # Wait for potential 3DS redirect
+        from src.payment.three_ds import ThreeDSHandler
+
+        # Wait for potential 3DS redirect/iframe
         await asyncio.sleep(3)
 
-        frames = page.frames
-        for frame in frames:
-            if "3ds" in frame.url.lower() or "secure" in frame.url.lower():
-                # 3DS detected - wait for completion
-                await self._wait_for_3ds_completion(page, timeout)
-                break
+        # Create a lightweight session wrapper for ThreeDSHandler
+        class _BrowserSession:
+            def __init__(self, p):
+                self.page = p
 
-    async def _wait_for_3ds_completion(
-        self,
-        page: Page,
-        timeout: int,
-    ) -> None:
-        """
-        Wait for 3DS authentication to complete.
-
-        Args:
-            page: Playwright page instance.
-            timeout: Maximum wait time in seconds.
-        """
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            # Check if back on VFS
-            if "vfsglobal" in page.url:
-                return
-
-            # Check for success indicators
-            content = await page.content()
-            if "success" in content.lower() or "confirmed" in content.lower():
-                return
-
-            await asyncio.sleep(2)
-
-        raise PaymentTimeoutError(
-            "3DS verification timeout",
-            timeout_seconds=timeout,
+        handler = ThreeDSHandler(
+            _BrowserSession(page),
+            challenge_timeout=timeout,
         )
+
+        # Auto-detect 3DS challenge
+        challenge = await handler.detect_3ds_challenge(page)
+        if not challenge:
+            logger.debug("vfs_no_3ds_detected")
+            return
+
+        logger.info(
+            "vfs_3ds_detected",
+            version=challenge.version.value,
+            method=challenge.method.value,
+        )
+
+        self.flow_state = VFSFlowState.PAYMENT_3DS
+
+        # Handle the 3DS challenge
+        result = await handler.handle_3ds(challenge)
+
+        if not result.is_authenticated():
+            raise PaymentTimeoutError(
+                f"3DS authentication failed: {result.error_message or result.status.value}",
+                timeout_seconds=timeout,
+            )
 
     async def _check_payment_result(self, page: Page) -> dict[str, Any]:
         """

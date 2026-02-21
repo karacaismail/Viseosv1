@@ -259,6 +259,58 @@ def create_celery_app(
 celery_app = create_celery_app()
 
 
+# =============================================================================
+# Worker Lifecycle: Bot Service Container
+# =============================================================================
+
+_worker_container = None
+
+
+from celery.signals import worker_init, worker_shutdown
+
+
+@worker_init.connect
+def _init_worker_container(**kwargs):
+    """Initialize BotServiceContainer when Celery worker starts."""
+    global _worker_container
+    import asyncio
+    from src.bot.container import BotServiceContainer
+
+    loop = asyncio.new_event_loop()
+    _worker_container = BotServiceContainer.get_instance()
+    try:
+        loop.run_until_complete(_worker_container.initialize())
+    except Exception:
+        import structlog
+        structlog.get_logger().warning("worker_container_init_failed", exc_info=True)
+    finally:
+        loop.close()
+
+
+@worker_shutdown.connect
+def _shutdown_worker_container(**kwargs):
+    """Shutdown BotServiceContainer when Celery worker stops."""
+    global _worker_container
+    if _worker_container and _worker_container.is_initialized:
+        import asyncio
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_worker_container.shutdown())
+        finally:
+            loop.close()
+    _worker_container = None
+
+
+def get_worker_container():
+    """
+    Get the worker's BotServiceContainer instance.
+
+    Returns:
+        BotServiceContainer or None if not initialized.
+    """
+    return _worker_container
+
+
 # Task routing helper functions
 def get_queue_for_priority(priority: str) -> str:
     """

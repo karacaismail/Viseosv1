@@ -67,9 +67,14 @@ async def lifespan(app: FastAPI):
     )
 
     # Startup: Initialize resources
-    # TODO: Initialize Redis connection pool
-    # TODO: Initialize Directus client
-    # TODO: Warm up caches
+    from src.bot.container import BotServiceContainer
+
+    container = BotServiceContainer.get_instance(settings)
+    try:
+        await container.initialize()
+        logger.info("bot_services_initialized")
+    except Exception as e:
+        logger.warning("bot_services_init_failed", error=str(e))
 
     logger.info("application_started")
 
@@ -78,9 +83,11 @@ async def lifespan(app: FastAPI):
     # Shutdown: Clean up resources
     logger.info("application_stopping")
 
-    # TODO: Close Redis connections
-    # TODO: Close HTTP client connections
-    # TODO: Flush pending metrics
+    try:
+        await container.shutdown()
+        logger.info("bot_services_shut_down")
+    except Exception as e:
+        logger.warning("bot_services_shutdown_failed", error=str(e))
 
     logger.info("application_stopped")
 

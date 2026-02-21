@@ -224,7 +224,7 @@ class CamoufoxLauncher(BaseBrowserLauncher):
             camoufox_config = {
                 "geoip": config.get("geoip", True),
                 "locale": config.get("locale", "tr-TR"),
-                "os": config.get("os", "Windows"),
+                "os": config.get("os", "windows"),
                 "humanize": config.get("humanize", True),
                 "headless": config.get("headless", True),
                 "block_webrtc": config.get("block_webrtc", True),

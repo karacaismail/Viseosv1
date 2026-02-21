@@ -370,6 +370,36 @@ OptionalApiKey = Annotated[str | None, Depends(get_optional_api_key)]
 
 
 # =============================================================================
+# Bot Service Container Dependencies
+# =============================================================================
+
+
+async def get_bot_container():
+    """
+    Get the initialized BotServiceContainer singleton.
+
+    Returns:
+        BotServiceContainer: The initialized bot service container.
+
+    Raises:
+        HTTPException: If container is not initialized.
+    """
+    from src.bot.container import BotServiceContainer
+
+    container = BotServiceContainer.get_instance()
+    if not container.is_initialized:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Bot services not initialized",
+        )
+    return container
+
+
+# Type alias for bot container dependency
+BotContainer = Annotated["BotServiceContainer", Depends(get_bot_container)]
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -397,4 +427,7 @@ __all__ = [
     # Agency context
     "get_agency_id",
     "AgencyId",
+    # Bot services
+    "get_bot_container",
+    "BotContainer",
 ]

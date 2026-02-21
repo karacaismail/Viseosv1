@@ -97,6 +97,9 @@ test = [
     "respx>=0.20.0",
 ]
 
+[project.scripts]
+vise = "src.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

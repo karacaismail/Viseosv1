@@ -492,6 +492,30 @@ class ProxyPoolManager:
                 **proxy_url,
             }
 
+    async def get_proxy_by_id(self, proxy_id: str) -> dict[str, Any] | None:
+        """
+        Get proxy connection details by its ID.
+
+        Args:
+            proxy_id: The proxy identifier.
+
+        Returns:
+            Dictionary with proxy connection details, or None if not found.
+        """
+        proxy_health = self.proxies.get(proxy_id)
+        if not proxy_health:
+            return None
+
+        proxy_url = self._build_proxy_url(proxy_health, session_id=None)
+        return {
+            "proxy_id": proxy_health.proxy_id,
+            "provider": proxy_health.provider,
+            "status": proxy_health.status.value,
+            "health_score": proxy_health.health_score,
+            "country": proxy_health.country,
+            **proxy_url,
+        }
+
     def _filter_eligible_proxies(
         self,
         country: str,
