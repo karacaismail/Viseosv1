@@ -228,8 +228,13 @@ async def _async_process_booking(
                 trigger="task_started",
             )
 
+            # State callback for intermediate transitions
+            async def _state_callback(new_state: BookingState, trigger: str):
+                nonlocal context
+                context = await state_machine.transition(context, new_state, trigger=trigger)
+
             # Execute booking (adapter integration point)
-            result = await _execute_booking(context, site)
+            result = await _execute_booking(context, site, state_callback=_state_callback)
 
             if result["success"]:
                 # Transition to COMPLETED
@@ -331,33 +336,163 @@ async def _async_process_booking(
             raise task.retry(countdown=5, max_retries=5)
 
 
-async def _execute_booking(context: BookingContext, site: str) -> dict[str, Any]:
+async def _execute_booking(
+    context: BookingContext,
+    site: str,
+    state_callback=None,
+) -> dict[str, Any]:
     """
     Execute the actual booking via site adapter.
 
-    This is a placeholder for the actual adapter integration.
-    In production, this would:
-    1. Acquire a bot account from the pool
-    2. Create a stealth browser session
-    3. Navigate and fill forms
-    4. Handle payment and verification
+    Orchestrates the full booking pipeline:
+    1. Acquire bot account from pool
+    2. Get proxy from pool
+    3. Create adapter and stealth browser session
+    4. Login, search slots, and book
 
     Args:
         context: The booking context.
-        site: Target site code.
+        site: Target site code (vfs, idata, bls, kkosmos).
+        state_callback: Optional async callback(BookingState, trigger) for intermediate transitions.
 
     Returns:
         Dictionary with booking result.
     """
-    # TODO: Integrate with site adapters (008-011)
-    # This is a stub for testing task infrastructure
+    import structlog
+    from datetime import date
+    from src.bot.adapters.base import SlotSearchCriteria
+    from src.bot.services.account import TargetSystem
+    from src.queue.celery_app import get_worker_container
 
-    return {
-        "success": True,
-        "confirmation_number": f"CONF-{uuid.uuid4().hex[:8].upper()}",
-        "appointment_date": datetime.utcnow().strftime("%Y-%m-%d"),
-        "appointment_time": "10:00",
-    }
+    log = structlog.get_logger("booking.execute")
+
+    container = get_worker_container()
+    if not container or not container.is_initialized:
+        raise ViseOSError("Bot services not initialized in worker")
+
+    # 1. Acquire a bot account
+    account = await container.account_manager.acquire(
+        system=TargetSystem(site),
+        country=context.metadata.get("target_country", "de") if hasattr(context, "metadata") else "de",
+        session_id=context.booking_id,
+    )
+    context.assigned_account_id = account.id
+
+    log.info(
+        "booking_account_acquired",
+        booking_id=context.booking_id,
+        account_id=account.id,
+    )
+
+    try:
+        # 2. Get proxy
+        proxy = await container.proxy_manager.get_proxy(
+            target_site=site,
+            country="tr",
+            sticky_session=True,
+        )
+        context.assigned_proxy_id = proxy["proxy_id"]
+
+        # 3. Get adapter
+        adapter = container.get_adapter(site)
+
+        # 4. Create session and execute booking flow
+        async with adapter.create_session(account, proxy) as session:
+            context.assigned_session_id = session.id
+
+            # 4a. Login
+            login_ok = await adapter.login(session, account)
+            if not login_ok:
+                await container.account_manager.release(account.id, success=False, error_message="Login failed")
+                await container.proxy_manager.report_failure(proxy["proxy_id"], "login_failed")
+                return {"success": False, "error": "Login failed", "error_type": "login_failed"}
+
+            # 4b. Emit SLOT_FOUND transition
+            if state_callback:
+                await state_callback(BookingState.SLOT_FOUND, "searching_slots")
+
+            # 4c. Search slots
+            booking_data = context.__dict__
+            criteria = SlotSearchCriteria(
+                country=booking_data.get("target_country", "de"),
+                category=booking_data.get("visa_category", "tourist"),
+                city=booking_data.get("city"),
+                from_date=date.today(),
+            )
+            slots = await adapter.search_slots(session, criteria)
+
+            if not slots:
+                await container.account_manager.release(account.id, success=True)
+                raise NoSlotsFoundError(
+                    "No available slots found",
+                    site=site,
+                    country=criteria.country,
+                )
+
+            log.info(
+                "booking_slots_found",
+                booking_id=context.booking_id,
+                count=len(slots),
+                first_date=slots[0].date.isoformat(),
+            )
+
+            # 4d. Emit BOOKING transition
+            if state_callback:
+                await state_callback(BookingState.BOOKING, "form_filling")
+
+            # 4e. Load applicant data and book
+            applicant_data = await _load_applicant_data(context.applicant_id)
+
+            result = await adapter.book_slot(session, slots[0], applicant_data)
+
+            if result.is_success:
+                await container.account_manager.release(account.id, success=True)
+                await container.proxy_manager.report_success(proxy["proxy_id"])
+                return {
+                    "success": True,
+                    "confirmation_number": result.confirmation_number,
+                    "appointment_date": result.appointment_date.isoformat() if result.appointment_date else None,
+                    "appointment_time": result.appointment_time,
+                }
+            else:
+                await container.account_manager.release(account.id, success=False, error_message=result.error_message)
+                await container.proxy_manager.report_failure(proxy["proxy_id"], result.error_code or "booking_failed")
+                return {
+                    "success": False,
+                    "error": result.error_message,
+                    "error_type": result.error_code,
+                }
+
+    except (NoSlotsFoundError, SlotNotAvailableError):
+        # Let these propagate — handled by the caller
+        raise
+    except AccountBannedError:
+        await container.account_manager.release(
+            account.id, success=False, error_message="Account banned"
+        )
+        raise
+    except Exception as e:
+        await container.account_manager.release(
+            account.id, success=False, error_message=str(e)
+        )
+        raise
+
+
+async def _load_applicant_data(applicant_id: str) -> dict[str, Any]:
+    """Load applicant data from Directus."""
+    from src.core.booking.repository import BookingRepository
+    from src.integrations.directus import get_directus_client
+
+    async with get_directus_client() as client:
+        # Query applicant directly
+        applicants = await client.get_items(
+            "applicants",
+            filter_dict={"id": {"_eq": applicant_id}},
+            limit=1,
+        )
+        if applicants:
+            return applicants[0]
+        return {"id": applicant_id}
 
 
 async def _handle_timeout(booking_id: str) -> None:

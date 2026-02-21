@@ -85,7 +85,7 @@ class StealthBrowserConfig:
             "height": 768,
         },
         # OS Fingerprint
-        "os": "Windows",
+        "os": "windows",
         # Humanize
         "humanize": True,
         # Headless (production mode)
@@ -1320,6 +1320,8 @@ class StealthEngine:
 
         Attempts to create session starting from Tier 1 (Camoufox),
         falling back to lower tiers if bot detection is triggered.
+        Each tier uses its specific browser launcher (Camoufox, Patchright,
+        SeleniumBase UC) via the launcher factory.
 
         Args:
             proxy: Optional proxy configuration.
@@ -1331,12 +1333,25 @@ class StealthEngine:
         Raises:
             BrowserError: If all tiers fail.
         """
+        from src.bot.engine.browser import (
+            BrowserTier as LauncherTier,
+            get_launcher,
+        )
+
         tiers = [BrowserTier.CAMOUFOX, BrowserTier.PATCHRIGHT, BrowserTier.SELENIUM_UC]
 
         for tier in tiers:
             try:
+                # Get the tier-specific launcher
+                launcher_tier = LauncherTier(tier.value)
+                launcher = get_launcher(launcher_tier)
+
                 profile = self._profile_generator.generate()
-                session = StealthSessionLauncher(profile=profile, proxy=proxy)
+                session = StealthSessionLauncher(
+                    profile=profile,
+                    proxy=proxy,
+                    launcher=launcher,
+                )
                 await session.launch()
 
                 if url:

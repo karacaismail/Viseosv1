@@ -1083,7 +1083,7 @@ class BaseSiteAdapter(ABC):
             if "timeout" in str(e).lower():
                 raise BrowserTimeoutError(
                     f"Timeout waiting for selector: {selector}",
-                    timeout_seconds=timeout_ms / 1000,
+                    timeout_ms=timeout_ms,
                 )
             raise SelectorNotFoundError(
                 f"Selector not found: {selector}",

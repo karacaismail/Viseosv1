@@ -70,19 +70,22 @@ services:
       DB_USER: ${POSTGRES_USER:-vise_os}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-vise_os_password}
 
-      # Redis Cache
+      # Redis (unified config for Directus 10.4+)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       CACHE_ENABLED: "true"
       CACHE_STORE: redis
-      CACHE_REDIS: redis://redis:6379/3
+      CACHE_AUTO_PURGE: "true"
 
       # Admin User
-      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL:-admin@vise-os.com}
-      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD:-admin_password}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL:-admin@vise-os.dev}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD:-admin123}
 
       # Performance
       RATE_LIMITER_ENABLED: "false"
       RATE_LIMITER_STORE: redis
-      RATE_LIMITER_REDIS: redis://redis:6379/4
+      MESSENGER_STORE: redis
+      SYNCHRONIZATION_STORE: redis
 
       # Extensions
       EXTENSIONS_PATH: /directus/extensions

@@ -25,6 +25,7 @@ Usage:
     app.include_router(router, prefix="/api/webhooks", tags=["webhooks"])
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -420,7 +421,7 @@ async def process_directus_event(
     logger.info(
         "directus_event_processing",
         request_id=request_id,
-        event=event,
+        webhook_event=event,
         collection=collection,
         keys=keys,
     )
@@ -429,7 +430,7 @@ async def process_directus_event(
         # Route to appropriate handler based on collection
         if collection == "booking_requests":
             await _handle_booking_event(event, keys, payload, request_id)
-        elif collection == "applicant_profiles":
+        elif collection in ("applicant_profiles", "applicants"):
             await _handle_applicant_event(event, keys, payload, request_id)
         elif collection == "agency_credits":
             await _handle_credit_event(event, keys, payload, request_id)
@@ -437,14 +438,14 @@ async def process_directus_event(
             logger.debug(
                 "directus_event_unhandled_collection",
                 collection=collection,
-                event=event,
+                webhook_event=event,
             )
 
     except Exception as e:
         logger.error(
             "directus_event_processing_error",
             request_id=request_id,
-            event=event,
+            webhook_event=event,
             collection=collection,
             error=str(e),
         )
@@ -457,19 +458,98 @@ async def _handle_booking_event(
     request_id: str,
 ) -> None:
     """Handle booking_requests collection events."""
-    if event == DirectusEvent.ITEMS_CREATE.value:
+    # Directus sends "booking_requests.items.create" or "items.create"
+    # Normalize: check if event ends with the enum value
+    is_create = event == DirectusEvent.ITEMS_CREATE.value or event.endswith(".items.create")
+    is_update = event == DirectusEvent.ITEMS_UPDATE.value or event.endswith(".items.update")
+
+    if is_create:
         # Queue new booking for processing
         logger.info(
             "booking_created_webhook",
             request_id=request_id,
             booking_ids=keys,
         )
-        # TODO: Trigger Celery task to queue booking
-        # from src.queue.tasks.booking import queue_booking
-        # for booking_id in keys:
-        #     queue_booking.delay(booking_id)
 
-    elif event == DirectusEvent.ITEMS_UPDATE.value:
+        # Initialize progress tracker and queue Celery task
+        from src.core.booking.progress import BookingProgressTracker
+        from src.integrations.directus import get_directus_client
+
+        tracker = BookingProgressTracker(get_directus_client())
+
+        for booking_id in keys:
+            try:
+                # Get booking details to determine target system
+                client = get_directus_client()
+                booking = await client.get_item(
+                    "booking_requests", booking_id,
+                    fields=["target_system", "target_country", "agency_id", "priority"],
+                )
+
+                if not booking:
+                    logger.error("booking_not_found", booking_id=booking_id)
+                    continue
+
+                site = booking.get("target_system", "vfs")
+                priority = booking.get("priority", 5)
+                agency_id = booking.get("agency_id")
+
+                # Update progress: queued
+                await tracker.emit(
+                    booking_id, "queued",
+                    f"Kuyruga alindi - {site}/{booking.get('target_country', '?')}",
+                    agency_id=agency_id,
+                )
+
+                # Try Celery first, fall back to inline demo
+                celery_available = False
+                try:
+                    from src.queue.celery_app import celery_app as _celery
+                    # Check if at least one worker is active
+                    inspector = _celery.control.inspect(timeout=1.0)
+                    active = inspector.active()
+                    celery_available = bool(active)
+                except Exception:
+                    celery_available = False
+
+                if celery_available:
+                    from src.queue.tasks.booking import process_booking
+                    task = process_booking.apply_async(
+                        kwargs={
+                            "booking_id": booking_id,
+                            "site": site,
+                            "priority": priority,
+                        },
+                        queue=f"{site}" if site in ("vfs", "idata", "bls", "kkosmos") else "normal",
+                    )
+                    logger.info(
+                        "booking_celery_task_queued",
+                        booking_id=booking_id,
+                        celery_task_id=task.id,
+                        queue=site,
+                    )
+                else:
+                    # No Celery workers — fail with clear message
+                    logger.error(
+                        "celery_worker_not_running",
+                        booking_id=booking_id,
+                    )
+                    await tracker.fail(
+                        booking_id,
+                        "NO_WORKER",
+                        "Celery worker calismıyor. 'celery -A src.queue.celery_app worker' komutuyla baslatin.",
+                        agency_id=agency_id,
+                    )
+
+            except Exception as e:
+                logger.error(
+                    "booking_queue_failed",
+                    booking_id=booking_id,
+                    error=str(e),
+                )
+                await tracker.fail(booking_id, "queue_error", str(e))
+
+    elif is_update:
         # Check for status changes
         if payload and "status" in payload:
             logger.info(
@@ -478,7 +558,94 @@ async def _handle_booking_event(
                 booking_ids=keys,
                 new_status=payload.get("status"),
             )
-            # TODO: Handle status transition side effects
+
+
+async def _run_booking_demo(
+    booking_id: str,
+    booking: dict[str, Any],
+    tracker: Any,
+) -> None:
+    """
+    Run a demo booking flow when Celery is not available.
+
+    Simulates the full booking pipeline with real progress updates
+    written to Directus, so the user can see stages in real-time.
+    Each stage waits a realistic duration before transitioning.
+
+    Args:
+        booking_id: Booking request UUID.
+        booking: Booking data dict.
+        tracker: BookingProgressTracker instance.
+    """
+    agency_id = booking.get("agency_id")
+    site = booking.get("target_system", "vfs")
+    country = booking.get("target_country", "?")
+
+    stages = [
+        ("validating", f"Basvuru verileri dogrulanıyor ({site}/{country})", 2),
+        ("credit_reserved", "1 kredi rezerve edildi", 1),
+        ("account_acquired", f"Bot hesabi secildi: {site}_bot@pool", 2),
+        ("proxy_acquired", f"Residential proxy baglandi: {country}", 1),
+        ("browser_launched", "Stealth tarayici baslatildi (Camoufox)", 3),
+        ("navigating", f"https://visa.vfsglobal.com/{country} adresine gidiliyor", 2),
+        ("logging_in", "Hesap bilgileriyle giris yapiliyor", 3),
+        ("logged_in", "Giris basarili, randevu sayfasina yonlendiriliyor", 1),
+        ("searching_slots", f"Musait randevu aranıyor ({country})", 5),
+        ("slot_found", "Randevu bulundu: 2026-03-15 10:30 Istanbul VFS", 2),
+        ("filling_form", "Basvuru formu dolduruluyor (isim, pasaport, vb.)", 4),
+        ("submitting", "Basvuru gonderiliyor", 3),
+        ("payment", "Odeme isleniyor", 3),
+        ("verifying", "Randevu dogrulanıyor", 2),
+    ]
+
+    try:
+        for stage_key, message, delay in stages:
+            await tracker.emit(
+                booking_id, stage_key, message,
+                agency_id=agency_id,
+                details={"demo": True, "site": site, "country": country},
+            )
+            await asyncio.sleep(delay)
+
+        # Complete with mock confirmation
+        await tracker.complete(
+            booking_id,
+            "Demo randevu basariyla alindi!",
+            agency_id=agency_id,
+            confirmation_number=f"DEMO-{booking_id[:8].upper()}",
+            appointment_date="2026-03-15",
+            appointment_time="10:30",
+            details={"demo": True, "location": "Istanbul VFS Center"},
+        )
+
+        # Also create a booking_result
+        from src.integrations.directus import get_directus_client
+        client = get_directus_client()
+        await client.create_item("booking_results", {
+            "booking_request_id": booking_id,
+            "agency_id": agency_id,
+            "status": "completed",
+            "confirmation_number": f"DEMO-{booking_id[:8].upper()}",
+            "appointment_date": "2026-03-15",
+            "appointment_time": "10:30",
+            "appointment_location": "Istanbul VFS Center",
+            "total_attempts": 1,
+            "credits_charged": 1,
+        })
+
+        logger.info(
+            "booking_demo_completed",
+            booking_id=booking_id,
+            confirmation="DEMO-" + booking_id[:8].upper(),
+        )
+
+    except Exception as e:
+        logger.error(
+            "booking_demo_failed",
+            booking_id=booking_id,
+            error=str(e),
+        )
+        await tracker.fail(booking_id, "demo_error", str(e), agency_id=agency_id)
 
 
 async def _handle_applicant_event(
@@ -488,7 +655,7 @@ async def _handle_applicant_event(
     request_id: str,
 ) -> None:
     """Handle applicant_profiles collection events."""
-    if event == DirectusEvent.ITEMS_CREATE.value:
+    if event.endswith("items.create") or event == DirectusEvent.ITEMS_CREATE.value:
         logger.info(
             "applicant_created_webhook",
             request_id=request_id,
@@ -503,7 +670,7 @@ async def _handle_credit_event(
     request_id: str,
 ) -> None:
     """Handle agency_credits collection events."""
-    if event == DirectusEvent.ITEMS_UPDATE.value:
+    if event.endswith("items.update") or event == DirectusEvent.ITEMS_UPDATE.value:
         logger.info(
             "credits_updated_webhook",
             request_id=request_id,
@@ -736,7 +903,7 @@ async def receive_directus_webhook(
     logger.info(
         "directus_webhook_received",
         request_id=request_id,
-        event=payload.event,
+        webhook_event=payload.event,
         collection=payload.collection,
         keys=keys,
     )

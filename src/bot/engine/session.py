@@ -403,6 +403,7 @@ class SessionManager:
         config: SessionConfig | None = None,
         pool: Any | None = None,  # BrowserSessionPool
         profile_generator: Any | None = None,  # BrowserProfileGenerator
+        stealth_engine: Any | None = None,  # StealthEngine for tier-aware session creation
     ) -> None:
         """
         Initialize session manager.
@@ -411,10 +412,12 @@ class SessionManager:
             config: Session management configuration.
             pool: Optional pre-existing session pool.
             profile_generator: Optional profile generator.
+            stealth_engine: Optional StealthEngine for tier-aware session creation.
         """
         self.config = config or SessionConfig()
         self._pool = pool
         self._profile_generator = profile_generator
+        self._stealth_engine = stealth_engine
         self._sessions: dict[str, ManagedSession] = {}
         self._active_sessions: dict[str, ManagedSession] = {}
         self._available_queue: asyncio.Queue[ManagedSession] = asyncio.Queue()
@@ -691,6 +694,9 @@ class SessionManager:
         """
         Create a new managed session.
 
+        Uses StealthEngine with tier-aware fallback when available,
+        otherwise falls back to direct StealthSessionLauncher.
+
         Args:
             proxy: Optional proxy configuration.
 
@@ -699,17 +705,21 @@ class SessionManager:
         """
         from src.bot.engine.stealth import StealthSessionLauncher
 
-        # Get a profile
-        profile_idx = len(self._sessions) % len(self._profiles)
-        profile = self._profiles[profile_idx]
-
         # Use provided proxy or rotate from list
         if not proxy and self._proxies:
             proxy = self._proxies[len(self._sessions) % len(self._proxies)]
 
-        # Create session
-        session = StealthSessionLauncher(profile=profile, proxy=proxy)
-        await session.launch()
+        # Use StealthEngine tier fallback if available
+        if self._stealth_engine:
+            session = await self._stealth_engine.create_session_with_fallback(
+                proxy=proxy,
+            )
+        else:
+            # Fallback: direct session without tier-aware launchers
+            profile_idx = len(self._sessions) % len(self._profiles)
+            profile = self._profiles[profile_idx]
+            session = StealthSessionLauncher(profile=profile, proxy=proxy)
+            await session.launch()
 
         # Wrap in managed session
         metrics = SessionMetrics(
